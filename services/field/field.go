@@ -3,7 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
-	"field-service/common/gcs"
+	"field-service/common/s3"
 	"field-service/common/util"
 	errConstant "field-service/constants/error"
 	"field-service/domain/dto"
@@ -14,11 +14,13 @@ import (
 	"mime/multipart"
 	"path"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type FieldService struct {
 	repository repositories.IRepositoryRegistry
-	gcs        gcs.IGCSClient
+	s3Client   s3.IS3Client
 }
 
 type IFieldService interface {
@@ -30,10 +32,10 @@ type IFieldService interface {
 	Delete(context.Context, string) error
 }
 
-func NewFieldService(repository repositories.IRepositoryRegistry, gcs gcs.IGCSClient) IFieldService {
+func NewFieldService(repository repositories.IRepositoryRegistry, s3Client s3.IS3Client) IFieldService {
 	return &FieldService{
 		repository: repository,
-		gcs:        gcs,
+		s3Client:   s3Client,
 	}
 }
 
@@ -133,8 +135,8 @@ func (s *FieldService) processAndUploadImage(ctx context.Context, image multipar
 		return "", err
 	}
 
-	filename := fmt.Sprintf("images/%s-%s.%s", time.Now().Format("20060102150405"), image.Filename, path.Ext(image.Filename))
-	url, err := s.gcs.UploadFile(ctx, filename, buffer.Bytes())
+	filename := fmt.Sprintf("images/%s-%s%s", time.Now().Format("20060102150405"), image.Filename, path.Ext(image.Filename))
+	url, err := s.s3Client.UploadFile(ctx, filename, buffer.Bytes())
 	if err != nil {
 		return "", err
 	}
@@ -187,8 +189,8 @@ func (s *FieldService) Create(ctx context.Context, request *dto.FieldRequest) (*
 	return response, nil
 }
 
-func (s *FieldService) Update(ctx context.Context, uuid string, request *dto.UpdateFieldRequest) (*dto.FieldResponse, error) {
-	field, err := s.repository.GetField().FindByUUID(ctx, uuid)
+func (s *FieldService) Update(ctx context.Context, uuidParams string, request *dto.UpdateFieldRequest) (*dto.FieldResponse, error) {
+	field, err := s.repository.GetField().FindByUUID(ctx, uuidParams)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +205,7 @@ func (s *FieldService) Update(ctx context.Context, uuid string, request *dto.Upd
 		}
 	}
 
-	fieldResult, err := s.repository.GetField().Update(ctx, uuid, &models.Field{
+	fieldResult, err := s.repository.GetField().Update(ctx, uuidParams, &models.Field{
 		Code:         request.Code,
 		Name:         request.Name,
 		PricePerHour: request.PricePerHour,
@@ -212,8 +214,11 @@ func (s *FieldService) Update(ctx context.Context, uuid string, request *dto.Upd
 	if err != nil {
 		return nil, err
 	}
+
+	uuidParsed, _ := uuid.Parse(uuidParams)
+
 	return &dto.FieldResponse{
-		UUID:         fieldResult.UUID,
+		UUID:         uuidParsed,
 		Code:         fieldResult.Code,
 		Name:         fieldResult.Name,
 		PricePerHour: fieldResult.PricePerHour,
@@ -235,5 +240,4 @@ func (s *FieldService) Delete(ctx context.Context, uuid string) error {
 	}
 
 	return nil
-
 }

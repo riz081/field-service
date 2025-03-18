@@ -1,10 +1,9 @@
 package cmd
 
 import (
-	"encoding/base64"
 	"field-service/clients"
-	"field-service/common/gcs"
 	"field-service/common/response"
+	"field-service/common/s3"
 	"field-service/config"
 	"field-service/constants"
 	"field-service/controllers"
@@ -50,10 +49,10 @@ var command = &cobra.Command{
 			panic(err)
 		}
 
-		gcs := initGCS()
+		s3Client := initS3()
 		client := clients.NewClientRegistry()
 		repository := repositories.NewRepositoryRegistry(db)
-		service := services.NewServiceRegistry(repository, gcs)
+		service := services.NewServiceRegistry(repository, s3Client)
 		controller := controllers.NewControllerRegistry(service)
 
 		router := gin.Default()
@@ -104,31 +103,17 @@ func Run() {
 	}
 }
 
-func initGCS() gcs.IGCSClient {
-	decode, err := base64.StdEncoding.DecodeString(config.Config.GCSPrivateKey)
-	if err != nil {
-		fmt.Println("Error decoding Base64 private key:", err)
-		panic(err)
-	}
+func initS3() s3.IS3Client {
+	// Log the configuration values for debugging (remove in production)
+	fmt.Println("S3 Region:", config.Config.S3Region)
+	fmt.Println("S3 Bucket:", config.Config.S3BucketName)
 
-	stringPrivateKey := string(decode)
-	fmt.Println("Decoded Private Key:", stringPrivateKey)
-	gcsServiceAccount := gcs.ServiceAccountKeyJSON{
-		Type:                    config.Config.GCSType,
-		ProjectID:               config.Config.GCSProjectID,
-		PrivateKeyID:            config.Config.GCSPrivateKeyID,
-		PrivateKey:              stringPrivateKey,
-		ClientEmail:             config.Config.GCSClientEmail,
-		ClientID:                config.Config.GCSClientID,
-		AuthURI:                 config.Config.GCSAuthURI,
-		TokenURI:                config.Config.GCSTokenURI,
-		AuthProviderX509CertURL: config.Config.GCSAuthProviderX509CertURL,
-		ClientX509CertURL:       config.Config.GCSClientX509CertURL,
-		UniverseDomain:          config.Config.GCSUniverseDomain,
-	}
-	gcsClient := gcs.NewGCSClient(
-		gcsServiceAccount,
-		config.Config.GCSBucketName,
+	s3Client := s3.NewS3Client(
+		config.Config.S3AccessKeyID,
+		config.Config.S3SecretAccessKey,
+		config.Config.S3Region,
+		config.Config.S3BucketName,
+		// Consider adding an additional parameter for signature version if your implementation supports it
 	)
-	return gcsClient
+	return s3Client
 }

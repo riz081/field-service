@@ -3,14 +3,14 @@ package repositories
 import (
 	"context"
 	"errors"
+	errWrap "field-service/common/error"
+	errConstant "field-service/constants/error"
+	errField "field-service/constants/error/field"
 	"field-service/domain/dto"
 	"field-service/domain/models"
 	"fmt"
 
-	errWrap "field-service/common/error"
-	errConstant "field-service/constants/error"
-	errField "field-service/constants/error/field"
-
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -31,13 +31,15 @@ func NewFieldRepository(db *gorm.DB) IFieldRepository {
 	return &FieldRepository{db: db}
 }
 
-func (r *FieldRepository) FindAllWithPagination(ctx context.Context, param *dto.FieldRequestParam) ([]models.Field, int64, error) {
+func (f *FieldRepository) FindAllWithPagination(
+	ctx context.Context,
+	param *dto.FieldRequestParam,
+) ([]models.Field, int64, error) {
 	var (
 		fields []models.Field
 		sort   string
 		total  int64
 	)
-
 	if param.SortColumn != nil {
 		sort = fmt.Sprintf("%s %s", *param.SortColumn, *param.SortOrder)
 	} else {
@@ -46,19 +48,18 @@ func (r *FieldRepository) FindAllWithPagination(ctx context.Context, param *dto.
 
 	limit := param.Limit
 	offset := (param.Page - 1) * limit
-	err := r.db.
+	err := f.db.
 		WithContext(ctx).
 		Limit(limit).
 		Offset(offset).
 		Order(sort).
 		Find(&fields).
 		Error
-
 	if err != nil {
 		return nil, 0, errWrap.WrapError(errConstant.ErrSQLError)
 	}
 
-	err = r.db.
+	err = f.db.
 		WithContext(ctx).
 		Model(&fields).
 		Count(&total).
@@ -70,9 +71,9 @@ func (r *FieldRepository) FindAllWithPagination(ctx context.Context, param *dto.
 	return fields, total, nil
 }
 
-func (r *FieldRepository) FindAllWithoutPagination(ctx context.Context) ([]models.Field, error) {
+func (f *FieldRepository) FindAllWithoutPagination(ctx context.Context) ([]models.Field, error) {
 	var fields []models.Field
-	err := r.db.
+	err := f.db.
 		WithContext(ctx).
 		Find(&fields).
 		Error
@@ -82,9 +83,9 @@ func (r *FieldRepository) FindAllWithoutPagination(ctx context.Context) ([]model
 	return fields, nil
 }
 
-func (r *FieldRepository) FindByUUID(ctx context.Context, uuid string) (*models.Field, error) {
+func (f *FieldRepository) FindByUUID(ctx context.Context, uuid string) (*models.Field, error) {
 	var field models.Field
-	err := r.db.
+	err := f.db.
 		WithContext(ctx).
 		Where("uuid = ?", uuid).
 		First(&field).
@@ -98,23 +99,23 @@ func (r *FieldRepository) FindByUUID(ctx context.Context, uuid string) (*models.
 	return &field, nil
 }
 
-func (r *FieldRepository) Create(ctx context.Context, req *models.Field) (*models.Field, error) {
+func (f *FieldRepository) Create(ctx context.Context, req *models.Field) (*models.Field, error) {
 	field := models.Field{
-		UUID:         req.UUID,
+		UUID:         uuid.New(),
 		Code:         req.Code,
 		Name:         req.Name,
 		Images:       req.Images,
 		PricePerHour: req.PricePerHour,
 	}
 
-	err := r.db.WithContext(ctx).Create(&field).Error
+	err := f.db.WithContext(ctx).Create(&field).Error
 	if err != nil {
 		return nil, errWrap.WrapError(errConstant.ErrSQLError)
 	}
 	return &field, nil
 }
 
-func (r *FieldRepository) Update(ctx context.Context, uuid string, req *models.Field) (*models.Field, error) {
+func (f *FieldRepository) Update(ctx context.Context, uuid string, req *models.Field) (*models.Field, error) {
 	field := models.Field{
 		Code:         req.Code,
 		Name:         req.Name,
@@ -122,7 +123,7 @@ func (r *FieldRepository) Update(ctx context.Context, uuid string, req *models.F
 		PricePerHour: req.PricePerHour,
 	}
 
-	err := r.db.WithContext(ctx).Where("uuid = ?", uuid).Updates(&field).Error
+	err := f.db.WithContext(ctx).Where("uuid = ?", uuid).Updates(&field).Error
 	if err != nil {
 		return nil, errWrap.WrapError(errConstant.ErrSQLError)
 	}
