@@ -1,9 +1,12 @@
-name: booking-order-app # change this to your app name
+name: booking-order-app
 services:
-  user-service: # change this to your service name
-    container_name: user-service # change this to your service name
-    image: sikoding20/user-service # change this to your image name
+  user-service:
+    container_name: field-service
+    # image: qika219/user-service:1
+    build: 
+      context: .
+      dockerfile: Dockerfile
     ports:
-      - "8001:8001" # change this to your port
+      - "8002:8002"
     env_file:
       - .env
